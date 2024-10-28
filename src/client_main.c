@@ -17,6 +17,7 @@
 
 static bool is_running = true;
 static int file_count = 0;
+static int zip_file_count = 0;
 
 #define FILE_DIRECTORY "file/"
 #define FILE_PREFIX     "log"
@@ -107,6 +108,7 @@ int main(int argc, char* argv[]){
     char buf[BUF_SIZE] = {0};
     char filename[128] = {0};
     bool is_first_recv = true;
+    FILE *file = NULL; // 定义为全局变量
 
     //确保目录是否存在
     ensure_directory_exists(FILE_DIRECTORY);
@@ -121,26 +123,38 @@ int main(int argc, char* argv[]){
         int recvBytes = 0;
         is_first_recv = true;
         while((recvBytes = recv(fd, buf, sizeof(buf), 0)) > 0){
-            //第一次接收，需要根据第一个字节判断是普通文件还是压缩文件
             if(is_first_recv){
-                
-                if (buf[0] == REGULAR_FILE) { // 普通文件
+                if (buf[0] == REGULAR_FILE) { 
                     snprintf(filename, sizeof(filename), "%s%s%d%s", FILE_DIRECTORY, FILE_PREFIX, file_count++, REGULAR_FILE_SUFFIX);
                 } 
-                else if (buf[0] == COMPRESSED_FILE) { // 压缩文件
-                    snprintf(filename, sizeof(filename), "%s%s%d%s", FILE_DIRECTORY, FILE_PREFIX, file_count++, ZIP_FILE_SUFFIX);
+                else if (buf[0] == COMPRESSED_FILE) {
+                    snprintf(filename, sizeof(filename), "%s%s%d%s", FILE_DIRECTORY, FILE_PREFIX, zip_file_count++, ZIP_FILE_SUFFIX);
                 }
 
                 is_first_recv = false;
 
-                write_file(filename, buf + 1, recvBytes - 1);
+                // 使用全局的 file 指针
+                file = fopen(filename, "wb");
+                if(!file){
+                    LOG(LOG_ERROR, "failed to fopen file %s: %s", filename, strerror(errno));
+                    break; // 退出当前循环
+                }
+                // fwrite 在这里
+                fwrite(buf + 1, 1, recvBytes - 1, file);
             }
             else{
-                write_file(filename, buf, recvBytes);
+                if (file) {
+                    fwrite(buf, 1, recvBytes, file); // 确保 file 不是 NULL
+                }
             }
         }
 
-        close(fd);
+        if(file){
+            fclose(file);
+            file = NULL; // 关闭后重置为 NULL
+        }
+
+        close(fd); // 关闭 socket
     }
 
     return 0;

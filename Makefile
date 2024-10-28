@@ -5,7 +5,7 @@ CC = gcc
 CFLAGS = -Wall -g -Iinclude
 
 # 可执行文件名
-TARGET = app
+TARGET = client
 
 # 源文件和目标文件路径
 SRCS = $(wildcard src/*.c)
